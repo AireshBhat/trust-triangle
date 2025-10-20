@@ -99,7 +99,7 @@ fn into_js_readable_stream<T: Serialize>(
 }
 
 #[wasm_bindgen]
-pub async fn generate_key() -> Result<String, JsError> {
+pub fn generate_key() -> String {
     let secret_key = SecretKey::generate(&mut rand::rng());
-    Ok(serde_wasm_bindgen::to_value(&secret_key).unwrap())
+    hex::encode(secret_key.to_bytes())
 }

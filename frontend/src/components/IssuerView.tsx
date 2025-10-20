@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ArrowLeft, FileCheck, Clock, Users, Send, CheckCircle, FileText } from 'lucide-react';
+import { ArrowLeft, FileCheck, Clock, Users, CheckCircle, FileText } from 'lucide-react';
 
 interface IssuerViewProps {
   onBack: () => void;
