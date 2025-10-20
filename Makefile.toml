@@ -1,0 +1,9 @@
+
+[tasks.deploy]
+workspace = false
+script = '''
+cd frontend
+npm run build:wasm:release
+npm install
+npm run build
+'''

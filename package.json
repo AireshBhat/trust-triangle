@@ -1,0 +1,8 @@
+{
+  "name": "trust-triangle",
+  "version": "0.1.0",
+  "scripts": {
+    "build": "cargo build --target=wasm32-unknown-unknown && wasm-bindgen ./target/wasm32-unknown-unknown/debug/trust_triangle.wasm --out-dir=public/wasm --weak-refs --target=web --debug",
+    "build:release": "cargo build --target=wasm32-unknown-unknown --release && wasm-bindgen ./target/wasm32-unknown-unknown/release/trust_triangle.wasm --out-dir=public/wasm --weak-refs --target=web && wasm-opt --enable-nontrapping-float-to-int --enable-bulk-memory -Os -o public/wasm/trust_triangle_bg.wasm public/wasm/trust_triangle_bg.wasm"
+  }
+}
