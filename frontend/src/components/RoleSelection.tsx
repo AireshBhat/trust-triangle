@@ -1,5 +1,5 @@
 import { UserCircle, FileCheck, Shield } from 'lucide-react';
-import { Role } from '../App';
+import type { Role } from '../lib';
 
 interface RoleSelectionProps {
   onRoleSelect: (role: Role) => void;
