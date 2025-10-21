@@ -1,0 +1,17 @@
+{
+  "name": "trust-triangle",
+  "type": "module",
+  "version": "0.1.0",
+  "files": [
+    "trust_triangle_bg.wasm",
+    "trust_triangle.js",
+    "trust_triangle_bg.js",
+    "trust_triangle.d.ts"
+  ],
+  "main": "trust_triangle.js",
+  "types": "trust_triangle.d.ts",
+  "sideEffects": [
+    "./trust_triangle.js",
+    "./snippets/*"
+  ]
+}
