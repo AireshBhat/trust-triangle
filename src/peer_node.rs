@@ -11,6 +11,8 @@ use tokio::sync::broadcast;
 use tokio_stream::wrappers::BroadcastStream;
 use tracing::info;
 
+use crate::credentials::income_credential::{SignedIncomeCredential, PaymentMode};
+
 pub struct PeerNode {
     secret_key: SecretKey,
     router: Router,
@@ -114,6 +116,50 @@ pub enum Role {
     Employee,
     Issuer,
     Verifier,
+}
+
+/// Structured messages for credential protocol
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "type", rename_all = "camelCase")]
+pub enum CredentialMessage {
+    /// Employee → Issuer: Request to issue an income credential
+    IssueRequest {
+        request_id: String,
+        employee_node_id: NodeId,
+        employee_name: String,
+        gross_salary: String,
+        net_salary: String,
+        currency: String,
+        pay_period: String,
+        payment_mode: PaymentMode,
+    },
+    
+    /// Issuer → Employee: Response with signed credential or error
+    IssueResponse {
+        request_id: String,
+        credential: Option<SignedIncomeCredential>,
+        error: Option<String>,
+    },
+    
+    /// Employee → Verifier: Present a credential for verification
+    PresentCredential {
+        presentation_id: String,
+        credential: SignedIncomeCredential,
+    },
+    
+    /// Verifier → Employee: Result of credential verification
+    VerificationResult {
+        presentation_id: String,
+        is_valid: bool,
+        message: String,
+    },
+    
+    /// Generic error message
+    Error {
+        request_id: String,
+        error_code: String,
+        message: String,
+    },
 }
 
 #[derive(Debug, Clone)]
