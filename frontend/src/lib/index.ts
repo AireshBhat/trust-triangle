@@ -37,7 +37,13 @@ export type {
   AcceptEvent, 
   ConnectEvent,
   PeerConnection,
-  ConnectionStatus 
+  ConnectionStatus,
+  PaymentMode,
+  RequestStatus,
+  PendingCredentialRequest,
+  ReceivedCredentialResponse,
+  SignedIncomeCredential,
+  CredentialMessage,
 } from './api';
 
 // Re-export storage types and utilities
@@ -46,4 +52,5 @@ export { storage } from './storage/storage';
 
 // Re-export helper functions
 export { generateSecretKey } from './peer-node';
+export * from './credential-helpers';
 

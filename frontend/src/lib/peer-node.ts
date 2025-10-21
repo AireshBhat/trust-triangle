@@ -7,6 +7,8 @@ import type {
   AcceptEvent,
   ConnectEvent,
   PeerConnection,
+  PendingCredentialRequest,
+  ReceivedCredentialResponse,
 } from './api';
 
 type PeerNodeState = {
@@ -115,11 +117,20 @@ export class PeerNodeAPI implements API {
         this.notifyConnectionSubscribers();
         break;
       }
-      case 'echoed': {
+      case 'messageReceived': {
         const connection = this.state.connections.get(event.nodeId);
         if (connection) {
           connection.lastActivity = new Date();
         }
+        log.info(`Message received from ${event.nodeId}: ${event.message.type}`);
+        break;
+      }
+      case 'responseSent': {
+        const connection = this.state.connections.get(event.nodeId);
+        if (connection) {
+          connection.lastActivity = new Date();
+        }
+        log.info(`Response sent to ${event.nodeId}: ${event.message.type}`);
         break;
       }
       case 'closed': {
@@ -172,9 +183,13 @@ export class PeerNodeAPI implements API {
               conn.status = 'connected';
               conn.lastActivity = new Date();
               break;
-            case 'sent':
-            case 'received':
+            case 'messageSent':
               conn.lastActivity = new Date();
+              log.info(`Message sent: ${event.message.type}`);
+              break;
+            case 'responseReceived':
+              conn.lastActivity = new Date();
+              log.info(`Response received: ${event.message.type}`);
               break;
             case 'closed':
               conn.status = event.error ? 'error' : 'disconnected';
@@ -261,6 +276,153 @@ export class PeerNodeAPI implements API {
     }
     
     this.state = null;
+  }
+
+  // Issuer methods
+
+  async getPendingRequests(): Promise<PendingCredentialRequest[]> {
+    if (!this.state) {
+      throw new Error('Peer node not initialized. Call spawn() first.');
+    }
+
+    try {
+      const requestsJson = await this.state.peerNode.get_pending_requests();
+      const requests = JSON.parse(requestsJson) as PendingCredentialRequest[];
+      log.info(`Retrieved ${requests.length} pending requests`);
+      return requests;
+    } catch (error) {
+      log.error('Failed to get pending requests', error);
+      throw error;
+    }
+  }
+
+  async approveRequest(requestId: string): Promise<void> {
+    if (!this.state) {
+      throw new Error('Peer node not initialized. Call spawn() first.');
+    }
+
+    try {
+      log.info(`Approving request: ${requestId}`);
+      await this.state.peerNode.approve_request(requestId);
+      log.info(`Request ${requestId} approved successfully`);
+    } catch (error) {
+      log.error('Failed to approve request', error);
+      throw error;
+    }
+  }
+
+  async rejectRequest(requestId: string, reason?: string): Promise<void> {
+    if (!this.state) {
+      throw new Error('Peer node not initialized. Call spawn() first.');
+    }
+
+    try {
+      log.info(`Rejecting request: ${requestId}`);
+      await this.state.peerNode.reject_request(requestId, reason ?? null);
+      log.info(`Request ${requestId} rejected successfully`);
+    } catch (error) {
+      log.error('Failed to reject request', error);
+      throw error;
+    }
+  }
+
+  // Verifier methods
+
+  async addTrustedIssuer(nodeId: string): Promise<void> {
+    if (!this.state) {
+      throw new Error('Peer node not initialized. Call spawn() first.');
+    }
+
+    try {
+      log.info(`Adding trusted issuer: ${nodeId}`);
+      await this.state.peerNode.add_trusted_issuer(nodeId);
+      log.info(`Issuer ${nodeId} added to trusted list`);
+    } catch (error) {
+      log.error('Failed to add trusted issuer', error);
+      throw error;
+    }
+  }
+
+  async removeTrustedIssuer(nodeId: string): Promise<void> {
+    if (!this.state) {
+      throw new Error('Peer node not initialized. Call spawn() first.');
+    }
+
+    try {
+      log.info(`Removing trusted issuer: ${nodeId}`);
+      await this.state.peerNode.remove_trusted_issuer(nodeId);
+      log.info(`Issuer ${nodeId} removed from trusted list`);
+    } catch (error) {
+      log.error('Failed to remove trusted issuer', error);
+      throw error;
+    }
+  }
+
+  async isTrustedIssuer(nodeId: string): Promise<boolean> {
+    if (!this.state) {
+      throw new Error('Peer node not initialized. Call spawn() first.');
+    }
+
+    try {
+      const isTrusted = await this.state.peerNode.is_trusted_issuer(nodeId);
+      return isTrusted;
+    } catch (error) {
+      log.error('Failed to check if issuer is trusted', error);
+      throw error;
+    }
+  }
+
+  async getTrustedIssuers(): Promise<string[]> {
+    if (!this.state) {
+      throw new Error('Peer node not initialized. Call spawn() first.');
+    }
+
+    try {
+      const issuersJson = await this.state.peerNode.get_trusted_issuers();
+      const issuers = JSON.parse(issuersJson) as string[];
+      log.info(`Retrieved ${issuers.length} trusted issuers`);
+      return issuers;
+    } catch (error) {
+      log.error('Failed to get trusted issuers', error);
+      throw error;
+    }
+  }
+
+  // Employee methods
+
+  async getReceivedCredentials(): Promise<ReceivedCredentialResponse[]> {
+    if (!this.state) {
+      throw new Error('Peer node not initialized. Call spawn() first.');
+    }
+
+    try {
+      const credentialsJson = await this.state.peerNode.get_received_credentials();
+      const credentials = JSON.parse(credentialsJson) as ReceivedCredentialResponse[];
+      log.info(`Retrieved ${credentials.length} received credentials`);
+      return credentials;
+    } catch (error) {
+      log.error('Failed to get received credentials', error);
+      throw error;
+    }
+  }
+
+  async getReceivedCredential(requestId: string): Promise<ReceivedCredentialResponse | null> {
+    if (!this.state) {
+      throw new Error('Peer node not initialized. Call spawn() first.');
+    }
+
+    try {
+      const credentialJson = await this.state.peerNode.get_received_credential(requestId);
+      if (credentialJson) {
+        const credential = JSON.parse(credentialJson) as ReceivedCredentialResponse;
+        log.info(`Retrieved credential for request ${requestId}`);
+        return credential;
+      }
+      return null;
+    } catch (error) {
+      log.error('Failed to get received credential', error);
+      throw error;
+    }
   }
 }
 
