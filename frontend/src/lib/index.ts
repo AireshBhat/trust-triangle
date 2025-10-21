@@ -41,8 +41,8 @@ export type {
 } from './api';
 
 // Re-export storage types and utilities
-export type { NodeState } from './storage';
-export { storage } from './storage';
+export type { NodeState } from './storage/storage';
+export { storage } from './storage/storage';
 
 // Re-export helper functions
 export { generateSecretKey } from './peer-node';

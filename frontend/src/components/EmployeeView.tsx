@@ -1,181 +1,248 @@
-import { useState } from 'react';
-import { ArrowLeft, UserCircle, Link, Send, Clock, CheckCircle } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { ArrowLeft, UserCircle, Plus, Settings, Loader2 } from 'lucide-react';
+import { employeeStorage, type EmployeeConfig } from '../lib/storage/employeeStorage';
+import { initApi } from '../lib';
+import NodeConfigView from '../views/wallet/NodeConfigView';
+import IncomeCredentialView from '../views/wallet/IncomeCredentialView';
+import NodeIdDisplay from './NodeIdDisplay';
+import { log } from '../lib/log';
 
 interface EmployeeViewProps {
   onBack: () => void;
 }
 
-type EmployeeStep = 'idle' | 'adding-issuer' | 'adding-verifier' | 'waiting-statement' | 'statement-received' | 'sending-to-verifier';
+type ViewState = 
+  | { type: 'loading' }
+  | { type: 'config' }
+  | { type: 'list'; config: EmployeeConfig }
+  | { type: 'generate'; config: EmployeeConfig }
+  | { type: 'settings'; config: EmployeeConfig };
 
 export default function EmployeeView({ onBack }: EmployeeViewProps) {
-  const [step, setStep] = useState<EmployeeStep>('idle');
-  const [issuerNodeId, setIssuerNodeId] = useState('');
-  const [verifierNodeId, setVerifierNodeId] = useState('');
-  const [statementData, setStatementData] = useState<any>(null);
+  const [viewState, setViewState] = useState<ViewState>({ type: 'loading' });
+  const [nodeId, setNodeId] = useState<string>('');
 
-  const handleAddIssuer = () => {
-    if (issuerNodeId.trim()) {
-      setStep('adding-verifier');
+  // Load employee configuration and node ID on mount
+  useEffect(() => {
+    loadEmployeeState();
+    loadNodeId();
+  }, []);
+
+  const loadNodeId = async () => {
+    try {
+      const api = await initApi('employee');
+      const info = api.getNodeInfo();
+      if (info) {
+        setNodeId(info.nodeId);
+      }
+    } catch (error) {
+      log.error('Failed to get node ID', error);
     }
   };
 
-  const handleAddVerifier = () => {
-    if (verifierNodeId.trim()) {
-      setStep('waiting-statement');
+  const loadEmployeeState = async () => {
+    try {
+      const config = await employeeStorage.loadEmployeeConfig();
+      
+      if (config && config.issuerNodeId && config.verifierNodeId) {
+        log.info('Employee configuration found');
+        setViewState({ type: 'list', config });
+      } else {
+        log.info('No employee configuration found, showing setup');
+        setViewState({ type: 'config' });
+      }
+    } catch (error) {
+      log.error('Failed to load employee state', error);
+      setViewState({ type: 'config' });
     }
   };
 
-  const handleSendToVerifier = () => {
-    setStep('sending-to-verifier');
+  const handleConfigComplete = (config: EmployeeConfig) => {
+    log.info('Configuration completed');
+    setViewState({ type: 'list', config });
   };
 
-  const mockStatement = {
-    employer: 'TechCorp Inc.',
-    employee: 'John Doe',
-    grossSalary: '$120,000',
-    netSalary: '$95,000',
-    currency: 'USD',
-    payPeriod: 'Annual',
-    issuedAt: new Date().toISOString(),
+  const handleGenerateStatement = () => {
+    if (viewState.type === 'list') {
+      setViewState({ type: 'generate', config: viewState.config });
+    }
   };
+
+  const handleBackToList = () => {
+    if (viewState.type !== 'list' && viewState.type !== 'loading' && viewState.type !== 'config') {
+      setViewState({ type: 'list', config: viewState.config });
+    }
+  };
+
+  const handleOpenSettings = () => {
+    if (viewState.type === 'list') {
+      setViewState({ type: 'settings', config: viewState.config });
+    }
+  };
+
+  const handleReconfigure = () => {
+    setViewState({ type: 'config' });
+  };
+
+  // Render based on view state
+  if (viewState.type === 'loading') {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center">
+        <div className="text-center">
+          <Loader2 className="w-16 h-16 text-blue-500 animate-spin mx-auto mb-4" />
+          <p className="text-slate-400">Loading employee wallet...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 p-6">
       <div className="max-w-4xl mx-auto">
-        <button
-          onClick={onBack}
-          className="flex items-center gap-2 text-slate-400 hover:text-white transition-colors mb-8"
-        >
-          <ArrowLeft className="w-5 h-5" />
-          Back to Role Selection
-        </button>
+        {/* Header */}
+        <div className="flex items-center justify-between mb-8">
+          <button
+            onClick={onBack}
+            className="flex items-center gap-2 text-slate-400 hover:text-white transition-colors"
+          >
+            <ArrowLeft className="w-5 h-5" />
+            Back to Role Selection
+          </button>
 
+          {viewState.type === 'list' && (
+            <button
+              onClick={handleOpenSettings}
+              className="p-2 hover:bg-slate-700 rounded-lg transition-colors"
+              title="Settings"
+            >
+              <Settings className="w-5 h-5 text-slate-400 hover:text-white" />
+            </button>
+          )}
+        </div>
+
+        {/* Main Card */}
         <div className="bg-slate-800/50 backdrop-blur-sm border border-slate-700 rounded-2xl p-8">
-          <div className="flex items-center gap-4 mb-8">
+          {/* Title Section */}
+          <div className="flex items-center gap-4 mb-6">
             <div className="w-16 h-16 bg-gradient-to-br from-blue-500 to-cyan-500 rounded-xl flex items-center justify-center shadow-lg shadow-blue-500/50">
               <UserCircle className="w-8 h-8 text-white" />
             </div>
             <div>
-              <h1 className="text-3xl font-bold text-white">Employee Dashboard</h1>
-              <p className="text-slate-400">Request and manage your credentials</p>
+              <h1 className="text-3xl font-bold text-white">Employee Wallet</h1>
+              <p className="text-slate-400">Manage your income credentials</p>
             </div>
           </div>
 
-          {step === 'idle' && (
-            <div className="space-y-6">
-              <div className="bg-slate-900/50 rounded-xl p-6 border border-slate-700">
-                <div className="flex items-center gap-3 mb-4">
-                  <Link className="w-6 h-6 text-blue-400" />
-                  <h3 className="text-xl font-semibold text-white">Add Issuer Node ID</h3>
-                </div>
-                <p className="text-slate-400 mb-4">Connect to the issuer to request credentials</p>
-                <input
-                  type="text"
-                  value={issuerNodeId}
-                  onChange={(e) => setIssuerNodeId(e.target.value)}
-                  placeholder="Enter issuer node ID..."
-                  className="w-full bg-slate-800 border border-slate-600 rounded-lg px-4 py-3 text-white placeholder-slate-500 focus:outline-none focus:border-blue-500 transition-colors mb-4"
-                />
-                <button
-                  onClick={handleAddIssuer}
-                  disabled={!issuerNodeId.trim()}
-                  className="w-full bg-gradient-to-r from-blue-500 to-cyan-500 text-white font-semibold py-3 rounded-lg hover:shadow-lg hover:shadow-blue-500/50 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  Connect to Issuer
-                </button>
-              </div>
+          {/* Node ID Display */}
+          {nodeId && (
+            <div className="mb-8">
+              <NodeIdDisplay 
+                nodeId={nodeId} 
+                label="Your Node ID (DID)" 
+                variant="employee" 
+              />
             </div>
           )}
 
-          {step === 'adding-verifier' && (
-            <div className="space-y-6">
-              <div className="bg-green-900/20 border border-green-700/50 rounded-xl p-4 flex items-center gap-3">
-                <CheckCircle className="w-5 h-5 text-green-400" />
-                <span className="text-green-300">Connected to Issuer: {issuerNodeId}</span>
-              </div>
-
-              <div className="bg-slate-900/50 rounded-xl p-6 border border-slate-700">
-                <div className="flex items-center gap-3 mb-4">
-                  <Link className="w-6 h-6 text-cyan-400" />
-                  <h3 className="text-xl font-semibold text-white">Add Verifier Node ID</h3>
-                </div>
-                <p className="text-slate-400 mb-4">Connect to the verifier who will validate your credentials</p>
-                <input
-                  type="text"
-                  value={verifierNodeId}
-                  onChange={(e) => setVerifierNodeId(e.target.value)}
-                  placeholder="Enter verifier node ID..."
-                  className="w-full bg-slate-800 border border-slate-600 rounded-lg px-4 py-3 text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500 transition-colors mb-4"
-                />
-                <button
-                  onClick={handleAddVerifier}
-                  disabled={!verifierNodeId.trim()}
-                  className="w-full bg-gradient-to-r from-cyan-500 to-blue-500 text-white font-semibold py-3 rounded-lg hover:shadow-lg hover:shadow-cyan-500/50 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  Connect to Verifier
-                </button>
-              </div>
-            </div>
+          {/* Content based on view state */}
+          {viewState.type === 'config' && (
+            <NodeConfigView onConfigComplete={handleConfigComplete} />
           )}
 
-          {step === 'waiting-statement' && (
+          {viewState.type === 'list' && (
             <div className="space-y-6">
-              <div className="bg-green-900/20 border border-green-700/50 rounded-xl p-4 flex items-center gap-3">
-                <CheckCircle className="w-5 h-5 text-green-400" />
-                <span className="text-green-300">Connected to Issuer & Verifier</span>
-              </div>
-
+              {/* Credentials List (Empty state for now) */}
               <div className="bg-slate-900/50 rounded-xl p-8 border border-slate-700 text-center">
-                <Clock className="w-16 h-16 text-blue-400 mx-auto mb-4 animate-pulse" />
-                <h3 className="text-xl font-semibold text-white mb-2">Waiting for Statement</h3>
-                <p className="text-slate-400">The issuer will send you a credential statement</p>
-                <button
-                  onClick={() => {
-                    setStatementData(mockStatement);
-                    setStep('statement-received');
-                  }}
-                  className="mt-6 text-sm text-slate-500 hover:text-slate-400 transition-colors"
-                >
-                  Simulate receiving statement
-                </button>
+                <div className="max-w-md mx-auto">
+                  <div className="w-16 h-16 bg-slate-800 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <UserCircle className="w-8 h-8 text-slate-600" />
+                  </div>
+                  <h3 className="text-xl font-semibold text-white mb-2">
+                    No Credentials Yet
+                  </h3>
+                  <p className="text-slate-400 mb-6">
+                    Request your first income statement credential from your payroll provider
+                  </p>
+                  <button
+                    onClick={handleGenerateStatement}
+                    className="bg-gradient-to-r from-blue-500 to-cyan-500 text-white font-semibold px-6 py-3 rounded-lg hover:shadow-lg hover:shadow-blue-500/50 transition-all inline-flex items-center gap-2"
+                  >
+                    <Plus className="w-5 h-5" />
+                    Generate Income Statement
+                  </button>
+                </div>
+              </div>
+
+              {/* Connected Services Info */}
+              <div className="bg-slate-900/50 rounded-xl p-6 border border-slate-700">
+                <h3 className="text-sm font-semibold text-slate-300 mb-3">Connected Services</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
+                  <div className="bg-emerald-900/20 border border-emerald-700/30 rounded-lg p-3">
+                    <p className="text-slate-400 mb-1">Issuer (Payroll Provider)</p>
+                    <p className="text-white font-mono text-xs break-all">
+                      {viewState.config.issuerNodeId}
+                    </p>
+                  </div>
+                  <div className="bg-amber-900/20 border border-amber-700/30 rounded-lg p-3">
+                    <p className="text-slate-400 mb-1">Verifier</p>
+                    <p className="text-white font-mono text-xs break-all">
+                      {viewState.config.verifierNodeId}
+                    </p>
+                  </div>
+                </div>
               </div>
             </div>
           )}
 
-          {step === 'statement-received' && (
-            <div className="space-y-6">
-              <div className="bg-green-900/20 border border-green-700/50 rounded-xl p-4 flex items-center gap-3">
-                <CheckCircle className="w-5 h-5 text-green-400" />
-                <span className="text-green-300">Statement Received</span>
-              </div>
+          {viewState.type === 'generate' && (
+            <IncomeCredentialView
+              employeeConfig={viewState.config}
+              onBack={handleBackToList}
+              onRequestSent={handleBackToList}
+            />
+          )}
 
+          {viewState.type === 'settings' && (
+            <div className="space-y-6">
+              <h2 className="text-2xl font-bold text-white mb-4">Wallet Settings</h2>
+              
               <div className="bg-slate-900/50 rounded-xl p-6 border border-slate-700">
-                <h3 className="text-xl font-semibold text-white mb-4">Credential Statement</h3>
-                <div className="space-y-3">
-                  {Object.entries(statementData).map(([key, value]) => (
-                    <div key={key} className="flex justify-between items-center py-2 border-b border-slate-700">
-                      <span className="text-slate-400 capitalize">{key.replace(/([A-Z])/g, ' $1').trim()}</span>
-                      <span className="text-white font-medium">{String(value)}</span>
+                <h3 className="text-lg font-semibold text-white mb-4">Connected Services</h3>
+                
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-slate-400 mb-2">
+                      Issuer Node ID
+                    </label>
+                    <div className="bg-slate-800 border border-slate-700 rounded-lg px-4 py-3 font-mono text-sm text-slate-300 break-all">
+                      {viewState.config.issuerNodeId}
                     </div>
-                  ))}
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-slate-400 mb-2">
+                      Verifier Node ID
+                    </label>
+                    <div className="bg-slate-800 border border-slate-700 rounded-lg px-4 py-3 font-mono text-sm text-slate-300 break-all">
+                      {viewState.config.verifierNodeId}
+                    </div>
+                  </div>
+
+                  <button
+                    onClick={handleReconfigure}
+                    className="w-full bg-slate-700 hover:bg-slate-600 text-white font-semibold py-3 rounded-lg transition-colors"
+                  >
+                    Reconfigure Node IDs
+                  </button>
                 </div>
               </div>
 
               <button
-                onClick={handleSendToVerifier}
-                className="w-full bg-gradient-to-r from-emerald-500 to-teal-500 text-white font-semibold py-3 rounded-lg hover:shadow-lg hover:shadow-emerald-500/50 transition-all flex items-center justify-center gap-2"
+                onClick={handleBackToList}
+                className="w-full bg-gradient-to-r from-slate-600 to-slate-700 text-white font-semibold py-3 rounded-lg hover:shadow-lg transition-all"
               >
-                <Send className="w-5 h-5" />
-                Send Statement to Verifier
+                Back to Wallet
               </button>
-            </div>
-          )}
-
-          {step === 'sending-to-verifier' && (
-            <div className="bg-slate-900/50 rounded-xl p-8 border border-slate-700 text-center">
-              <CheckCircle className="w-16 h-16 text-green-400 mx-auto mb-4" />
-              <h3 className="text-xl font-semibold text-white mb-2">Statement Sent</h3>
-              <p className="text-slate-400">Your credential has been sent to the verifier for validation</p>
             </div>
           )}
         </div>

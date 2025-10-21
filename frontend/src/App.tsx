@@ -4,7 +4,7 @@ import EmployeeView from './components/EmployeeView';
 import IssuerView from './components/IssuerView';
 import VerifierView from './components/VerifierView';
 import LoadingScreen from './components/LoadingScreen';
-import { storage, type NodeState } from './lib/storage';
+import { storage, type NodeState } from './lib/storage/storage';
 import { initApi, resetApi, type Role } from './lib';
 import { log } from './lib/log';
 
