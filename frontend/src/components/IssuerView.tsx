@@ -1,5 +1,8 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { ArrowLeft, FileCheck, Clock, Users, CheckCircle, FileText } from 'lucide-react';
+import { initApi } from '../lib';
+import NodeIdDisplay from './NodeIdDisplay';
+import { log } from '../lib/log';
 
 interface IssuerViewProps {
   onBack: () => void;
@@ -19,14 +22,32 @@ interface StatementForm {
 export default function IssuerView({ onBack }: IssuerViewProps) {
   const [step, setStep] = useState<IssuerStep>('waiting-connection');
   const [employeeNodeId, setEmployeeNodeId] = useState('');
+  const [nodeId, setNodeId] = useState<string>('');
   const [statementForm, setStatementForm] = useState<StatementForm>({
     employerName: '',
     employeeName: '',
     grossSalary: '',
     netSalary: '',
-    currency: 'USD',
+    currency: 'INR',
     payPeriod: 'Annual',
   });
+
+  // Load node ID on mount
+  useEffect(() => {
+    loadNodeId();
+  }, []);
+
+  const loadNodeId = async () => {
+    try {
+      const api = await initApi('issuer');
+      const info = api.getNodeInfo();
+      if (info) {
+        setNodeId(info.nodeId);
+      }
+    } catch (error) {
+      log.error('Failed to get node ID', error);
+    }
+  };
 
   const handleEmployeeConnect = () => {
     setEmployeeNodeId('employee-' + Math.random().toString(36).substring(7));
@@ -60,7 +81,7 @@ export default function IssuerView({ onBack }: IssuerViewProps) {
         </button>
 
         <div className="bg-slate-800/50 backdrop-blur-sm border border-slate-700 rounded-2xl p-8">
-          <div className="flex items-center gap-4 mb-8">
+          <div className="flex items-center gap-4 mb-6">
             <div className="w-16 h-16 bg-gradient-to-br from-emerald-500 to-teal-500 rounded-xl flex items-center justify-center shadow-lg shadow-emerald-500/50">
               <FileCheck className="w-8 h-8 text-white" />
             </div>
@@ -70,17 +91,23 @@ export default function IssuerView({ onBack }: IssuerViewProps) {
             </div>
           </div>
 
+          {/* Node ID Display */}
+          {nodeId && (
+            <div className="mb-8">
+              <NodeIdDisplay 
+                nodeId={nodeId} 
+                label="Your Issuer Node ID (DID)" 
+                variant="issuer" 
+              />
+            </div>
+          )}
+
           {step === 'waiting-connection' && (
             <div className="space-y-6">
               <div className="bg-slate-900/50 rounded-xl p-8 border border-slate-700 text-center">
                 <Clock className="w-16 h-16 text-emerald-400 mx-auto mb-4 animate-pulse" />
                 <h3 className="text-xl font-semibold text-white mb-2">Waiting for Employee Connection</h3>
                 <p className="text-slate-400 mb-6">Listening for incoming P2P connections from employees</p>
-
-                <div className="bg-slate-800 rounded-lg p-4 mb-6">
-                  <p className="text-slate-500 text-sm mb-2">Your Node ID:</p>
-                  <p className="text-emerald-400 font-mono text-lg">issuer-{Math.random().toString(36).substring(7)}</p>
-                </div>
 
                 <button
                   onClick={handleEmployeeConnect}

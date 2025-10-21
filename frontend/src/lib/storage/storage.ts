@@ -1,5 +1,5 @@
 import localforage from 'localforage';
-import type { Role } from './api';
+import type { Role } from '../api';
 
 // Configure localforage
 localforage.config({
