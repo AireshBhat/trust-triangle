@@ -4,14 +4,18 @@ import type { EmployeeConfig } from '../../lib/storage/employeeStorage';
 import type { IncomeCredentialData, PaymentMode } from '../../types/incomeCredential';
 import { CURRENCY_OPTIONS, PAYMENT_MODE_OPTIONS } from '../../types/incomeCredential';
 import { log } from '../../lib/log';
+import { createIssueRequest, generateRequestId } from '../../lib';
+import type { API } from '../../lib';
 
 interface IncomeCredentialViewProps {
+  api: API; // The single app-wide API instance
   employeeConfig: EmployeeConfig;
   onBack: () => void;
   onRequestSent?: () => void;
 }
 
 export default function IncomeCredentialView({ 
+  api,
   employeeConfig, 
   onBack,
   onRequestSent 
@@ -45,6 +49,10 @@ export default function IncomeCredentialView({
 
   const handleSubmit = async () => {
     // Validation
+    if (!formData.employeeName?.trim()) {
+      setError('Please enter your name');
+      return;
+    }
     if (!formData.grossSalary || formData.grossSalary <= 0) {
       setError('Please enter a valid gross salary');
       return;
@@ -66,42 +74,59 @@ export default function IncomeCredentialView({
     setError(null);
 
     try {
-      // Prepare complete credential data
-      const credentialData: IncomeCredentialData = {
-        ...formData,
-        employerDID: employeeConfig.issuerNodeId,
-        payrollProcessorDID: employeeConfig.issuerNodeId, // Same as employer for now
-      };
+      // Get employee's node info
+      const nodeInfo = api.getNodeInfo();
+      if (!nodeInfo) {
+        throw new Error('Node not initialized');
+      }
 
-      log.info(`Requesting income credential signature for ${credentialData.employeeName}`);
+      log.info(`Requesting income credential for ${formData.employeeName}`);
 
-      // TODO: Backend integration
-      // Fetch the api from the parent component. There must be only one instance of this api per app.
-      // await api.connect(
-      //   employeeConfig.issuerNodeId,
-      //   JSON.stringify({
-      //     type: 'income_credential_request',
-      //     data: credentialData,
-      //     timestamp: new Date().toISOString(),
-      //     requestId: crypto.randomUUID(),
-      //   })
-      // );
+      // Convert pay period from MM/YYYY to YYYY-MM format for backend
+      const [month, year] = formData.payPeriod.split('/');
+      const payPeriodFormatted = `${year}-${month.padStart(2, '0')}`;
 
-      // Simulate request sending for now
-      await new Promise(resolve => setTimeout(resolve, 1500));
+      // Generate request ID
+      const requestId = generateRequestId();
 
-      log.info('Income credential request sent successfully');
+      // Create credential request using helper function
+      const requestPayload = createIssueRequest({
+        requestId,
+        employeeNodeId: nodeInfo.nodeId,
+        employeeName: formData.employeeName,
+        grossSalary: formData.grossSalary.toString(),
+        netSalary: formData.netSalary.toString(),
+        currency: formData.currency,
+        payPeriod: payPeriodFormatted,
+        paymentMode: formData.paymentMode,
+      });
+
+      log.info(`Sending credential request to issuer: ${employeeConfig.issuerNodeId}`);
+      log.info(`Request ID: ${requestId}`);
+
+      // Send request to issuer
+      await api.connect(employeeConfig.issuerNodeId, requestPayload);
+
+      log.info('✅ Income credential request sent successfully');
       
+      // Store request ID for tracking
+      localStorage.setItem(`pending_request_${requestId}`, JSON.stringify({
+        requestId,
+        employeeName: formData.employeeName,
+        timestamp: new Date().toISOString(),
+        status: 'pending',
+      }));
+
       // Show success and call callback
       if (onRequestSent) {
         onRequestSent();
       } else {
-        alert('✅ Statement request sent to issuer!\n\n(Backend integration pending)');
+        alert(`✅ Statement request sent to issuer!\n\nRequest ID: ${requestId.substring(0, 8)}...\n\nYou will be notified when the issuer approves or rejects your request.`);
         onBack();
       }
     } catch (err) {
       log.error('Failed to send credential request', err);
-      setError('Failed to send request. Please try again.');
+      setError(err instanceof Error ? err.message : 'Failed to send request. Please try again.');
     } finally {
       setSubmitting(false);
     }

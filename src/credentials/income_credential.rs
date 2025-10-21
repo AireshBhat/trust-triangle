@@ -42,6 +42,7 @@ impl PaymentMode {
 
 /// Core income credential data structure
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct IncomeCredential {
     /// Unique credential identifier
     pub id: String,
@@ -73,6 +74,7 @@ pub struct IncomeCredential {
 
 /// Signed income credential with cryptographic signature
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct SignedIncomeCredential {
     /// The credential data
     pub credential: IncomeCredential,

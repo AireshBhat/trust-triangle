@@ -230,7 +230,7 @@ pub enum Role {
 
 /// Structured messages for credential protocol
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(tag = "type", rename_all = "camelCase")]
+#[serde(tag = "type", rename_all = "camelCase", rename_all_fields = "camelCase")]
 pub enum CredentialMessage {
     /// Employee → Issuer: Request to issue an income credential
     IssueRequest {
@@ -652,13 +652,23 @@ impl Peer {
         // Initiate connection to employee
         let endpoint = endpoint.clone();
         task::spawn(async move {
-            let (event_sender, _) = async_channel::bounded(16);
+            let (event_sender, event_receiver) = async_channel::bounded(16);
+            
+            // Spawn a task to consume events (so the channel doesn't close)
+            let _event_consumer = task::spawn(async move {
+                while let Ok(_event) = event_receiver.recv().await {
+                    // Just consume events, we don't need to handle them
+                }
+            });
+            
             if let Err(e) = connect(&endpoint, employee_node_id, message, event_sender).await {
                 tracing::error!("Failed to send credential to employee: {}", e);
+            } else {
+                info!("Credential successfully sent to employee {}", employee_node_id);
             }
         });
         
-        info!("Credential sent to employee {}", employee_node_id);
+        info!("Credential send task initiated for employee {}", employee_node_id);
         Ok(())
     }
 
@@ -699,13 +709,23 @@ impl Peer {
         // Initiate connection to employee
         let endpoint = endpoint.clone();
         task::spawn(async move {
-            let (event_sender, _) = async_channel::bounded(16);
+            let (event_sender, event_receiver) = async_channel::bounded(16);
+            
+            // Spawn a task to consume events (so the channel doesn't close)
+            let _event_consumer = task::spawn(async move {
+                while let Ok(_event) = event_receiver.recv().await {
+                    // Just consume events, we don't need to handle them
+                }
+            });
+            
             if let Err(e) = connect(&endpoint, employee_node_id, message, event_sender).await {
                 tracing::error!("Failed to send rejection to employee: {}", e);
+            } else {
+                info!("Rejection successfully sent to employee {}", employee_node_id);
             }
         });
         
-        info!("Rejection sent to employee {}", employee_node_id);
+        info!("Rejection send task initiated for employee {}", employee_node_id);
         Ok(())
     }
 

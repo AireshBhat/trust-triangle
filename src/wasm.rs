@@ -82,6 +82,8 @@ impl PeerNode {
             .context("failed to parse node id")
             .map_err(to_js_err)?;
         
+        // Log payload
+        tracing::info!("payload: {}", payload);
         // Parse the payload as a CredentialMessage
         let message: peer_node::CredentialMessage = serde_json::from_str(&payload)
             .context("failed to parse credential message from JSON")

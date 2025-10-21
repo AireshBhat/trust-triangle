@@ -67,18 +67,30 @@ export function generateRequestId(): string {
 /**
  * Format salary amount for display
  */
-export function formatSalary(amount: string, currency: string): string {
+export function formatSalary(amount: string | undefined, currency: string | undefined): string {
+  if (!amount || !currency) return 'N/A';
+  
   const num = parseFloat(amount);
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: currency,
-  }).format(num);
+  
+  if (isNaN(num)) return amount; // Return as-is if not a valid number
+  
+  try {
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: currency,
+    }).format(num);
+  } catch (error) {
+    // If currency is invalid, return a simple format
+    return `${currency} ${num.toFixed(2)}`;
+  }
 }
 
 /**
  * Format payment mode for display
  */
-export function formatPaymentMode(mode: PaymentMode): string {
+export function formatPaymentMode(mode: PaymentMode | undefined): string {
+  if (!mode) return 'N/A';
+  
   const modeMap: Record<PaymentMode, string> = {
     bank_transfer: 'Bank Transfer',
     crypto: 'Cryptocurrency',
@@ -92,9 +104,17 @@ export function formatPaymentMode(mode: PaymentMode): string {
 /**
  * Format pay period for display (YYYY-MM format)
  */
-export function formatPayPeriod(period: string): string {
+export function formatPayPeriod(period: string | undefined): string {
+  if (!period) return 'N/A';
+  
   const [year, month] = period.split('-');
+  
+  if (!year || !month) return period; // Return as-is if not in expected format
+  
   const date = new Date(parseInt(year), parseInt(month) - 1);
+  
+  if (isNaN(date.getTime())) return period; // Return as-is if invalid date
+  
   return new Intl.DateTimeFormat('en-US', {
     year: 'numeric',
     month: 'long',
