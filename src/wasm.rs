@@ -159,6 +159,28 @@ impl PeerNode {
             .map_err(to_js_err)
     }
 
+    /// Get all verified credentials (returns JSON string)
+    pub async fn get_verified_credentials(&self) -> Result<String, JsError> {
+        let credentials = self.0.get_verified_credentials().await;
+        serde_json::to_string(&credentials)
+            .context("failed to serialize verified credentials")
+            .map_err(to_js_err)
+    }
+
+    /// Get a specific verified credential by presentation ID (returns JSON string or null)
+    pub async fn get_verified_credential(&self, presentation_id: String) -> Result<Option<String>, JsError> {
+        let credential = self.0.get_verified_credential(&presentation_id).await;
+        match credential {
+            Some(cred) => {
+                let json = serde_json::to_string(&cred)
+                    .context("failed to serialize verified credential")
+                    .map_err(to_js_err)?;
+                Ok(Some(json))
+            }
+            None => Ok(None),
+        }
+    }
+
     // Employee methods
 
     /// Get all received credentials (returns JSON string)

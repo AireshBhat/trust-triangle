@@ -9,6 +9,7 @@ import type {
   PeerConnection,
   PendingCredentialRequest,
   ReceivedCredentialResponse,
+  VerifiedCredentialRecord,
 } from './api';
 
 type PeerNodeState = {
@@ -384,6 +385,39 @@ export class PeerNodeAPI implements API {
       return issuers;
     } catch (error) {
       log.error('Failed to get trusted issuers', error);
+      throw error;
+    }
+  }
+
+  async getVerifiedCredentials(): Promise<VerifiedCredentialRecord[]> {
+    if (!this.state) {
+      throw new Error('Peer node not initialized. Call spawn() first.');
+    }
+
+    try {
+      const credentialsJson = await this.state.peerNode.get_verified_credentials();
+      const credentials = JSON.parse(credentialsJson) as VerifiedCredentialRecord[];
+      log.info(`Retrieved ${credentials.length} verified credentials`);
+      return credentials;
+    } catch (error) {
+      log.error('Failed to get verified credentials', error);
+      throw error;
+    }
+  }
+
+  async getVerifiedCredential(presentationId: string): Promise<VerifiedCredentialRecord | null> {
+    if (!this.state) {
+      throw new Error('Peer node not initialized. Call spawn() first.');
+    }
+
+    try {
+      const credentialJson = await this.state.peerNode.get_verified_credential(presentationId);
+      if (credentialJson) {
+        return JSON.parse(credentialJson) as VerifiedCredentialRecord;
+      }
+      return null;
+    } catch (error) {
+      log.error('Failed to get verified credential', error);
       throw error;
     }
   }

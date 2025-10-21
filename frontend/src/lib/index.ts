@@ -42,6 +42,7 @@ export type {
   RequestStatus,
   PendingCredentialRequest,
   ReceivedCredentialResponse,
+  VerifiedCredentialRecord,
   SignedIncomeCredential,
   CredentialMessage,
 } from './api';

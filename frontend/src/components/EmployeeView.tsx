@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { ArrowLeft, UserCircle, Plus, Settings, Loader2, CheckCircle, XCircle, FileCheck, DollarSign, Calendar, RefreshCw, Send } from 'lucide-react';
 import { employeeStorage, type EmployeeConfig } from '../lib/storage/employeeStorage';
-import { initApi, formatSalary, formatPaymentMode, formatPayPeriod, type API, type ReceivedCredentialResponse } from '../lib';
+import { initApi, formatSalary, formatPaymentMode, formatPayPeriod, createPresentCredential, generateRequestId, type API, type ReceivedCredentialResponse, type AcceptEvent } from '../lib';
 import NodeConfigView from '../views/wallet/NodeConfigView';
 import IncomeCredentialView from '../views/wallet/IncomeCredentialView';
 import NodeIdDisplay from './NodeIdDisplay';
@@ -25,6 +25,7 @@ export default function EmployeeView({ onBack }: EmployeeViewProps) {
   const [credentials, setCredentials] = useState<ReceivedCredentialResponse[]>([]);
   const [loadingCredentials, setLoadingCredentials] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [presentingCredential, setPresentingCredential] = useState<string | null>(null); // requestId being presented
 
   // Load employee configuration and node ID on mount
   useEffect(() => {
@@ -64,6 +65,22 @@ export default function EmployeeView({ onBack }: EmployeeViewProps) {
       if (info) {
         setNodeId(info.nodeId);
       }
+
+      // Subscribe to accept events to listen for verification results
+      apiInstance.subscribeToAcceptEvents((event: AcceptEvent) => {
+        if (event.type === 'messageReceived' && event.message.type === 'verificationResult') {
+          const result = event.message;
+          log.info(`Received verification result: ${JSON.stringify(result)}`);
+
+          // Clear presenting state
+          setPresentingCredential(null);
+
+          // Show notification
+          const status = result.isValid && result.isTrusted ? '✅ Verified' : 
+                        result.isValid ? '⚠️ Valid but untrusted' : '❌ Invalid';
+          alert(`${status}\n\n${result.message}`);
+        }
+      });
     } catch (error) {
       log.error('Failed to get node ID', error);
     }
@@ -123,6 +140,54 @@ export default function EmployeeView({ onBack }: EmployeeViewProps) {
       setError(err instanceof Error ? err.message : 'Failed to refresh');
     } finally {
       setLoadingCredentials(false);
+    }
+  };
+
+  const handlePresentToVerifier = async (cred: ReceivedCredentialResponse) => {
+    if (!api || !cred.credential) {
+      alert('No valid credential to present');
+      return;
+    }
+
+    // Get verifier Node ID from config or prompt
+    let verifierNodeId: string | null = null;
+    
+    if (viewState.type === 'list' && viewState.config.verifierNodeId) {
+      verifierNodeId = viewState.config.verifierNodeId;
+    } else {
+      verifierNodeId = prompt('Enter Verifier Node ID:');
+    }
+
+    if (!verifierNodeId || !verifierNodeId.trim()) {
+      alert('Verifier Node ID is required');
+      return;
+    }
+
+    try {
+      setPresentingCredential(cred.requestId);
+      
+      // Generate a unique presentation ID
+      const presentationId = generateRequestId();
+      
+      // Create the presentation message
+      const payload = createPresentCredential({
+        presentationId,
+        credential: cred.credential,
+      });
+
+      log.info(`Presenting credential to verifier ${JSON.stringify({ presentationId, verifierNodeId })}`);
+
+      // Send to verifier
+      await api.connect(verifierNodeId.trim(), payload);
+      
+      // Store the presentation ID mapping for tracking
+      localStorage.setItem(`presentation_${presentationId}`, cred.requestId);
+      
+      alert(`Credential sent to verifier!\n\nPresentation ID: ${presentationId}\n\nWaiting for verification result...`);
+    } catch (err) {
+      log.error('Failed to present credential', err);
+      alert(`Failed to present credential: ${err instanceof Error ? err.message : 'Unknown error'}`);
+      setPresentingCredential(null);
     }
   };
 
@@ -394,10 +459,21 @@ export default function EmployeeView({ onBack }: EmployeeViewProps) {
                       {cred.credential && (
                         <div className="pt-4 border-t border-slate-700">
                           <button
-                            className="w-full bg-gradient-to-r from-blue-500 to-cyan-500 text-white font-semibold py-2.5 rounded-lg hover:shadow-lg hover:shadow-blue-500/50 transition-all flex items-center justify-center gap-2"
+                            onClick={() => handlePresentToVerifier(cred)}
+                            disabled={presentingCredential === cred.requestId}
+                            className="w-full bg-gradient-to-r from-blue-500 to-cyan-500 text-white font-semibold py-2.5 rounded-lg hover:shadow-lg hover:shadow-blue-500/50 transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                           >
-                            <Send className="w-4 h-4" />
-                            Present to Verifier
+                            {presentingCredential === cred.requestId ? (
+                              <>
+                                <Loader2 className="w-4 h-4 animate-spin" />
+                                Sending...
+                              </>
+                            ) : (
+                              <>
+                                <Send className="w-4 h-4" />
+                                Present to Verifier
+                              </>
+                            )}
                           </button>
                         </div>
                       )}

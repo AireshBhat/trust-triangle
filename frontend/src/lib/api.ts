@@ -32,6 +32,17 @@ export interface ReceivedCredentialResponse {
   issuerNodeId: string;
 }
 
+export interface VerifiedCredentialRecord {
+  presentationId: string;
+  credential: SignedIncomeCredential;
+  employeeNodeId: string;
+  issuerNodeId: string;
+  isValid: boolean;
+  isTrusted: boolean;
+  verifiedAt: string;
+  verifierNodeId: string;
+}
+
 export interface SignedIncomeCredential {
   credential: {
     id: string;
@@ -135,6 +146,8 @@ export interface API {
   removeTrustedIssuer(nodeId: string): Promise<void>;
   isTrustedIssuer(nodeId: string): Promise<boolean>;
   getTrustedIssuers(): Promise<string[]>;
+  getVerifiedCredentials(): Promise<VerifiedCredentialRecord[]>;
+  getVerifiedCredential(presentationId: string): Promise<VerifiedCredentialRecord | null>;
 
   // Employee methods
   getReceivedCredentials(): Promise<ReceivedCredentialResponse[]>;

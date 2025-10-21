@@ -51,6 +51,20 @@ pub struct ReceivedCredentialResponse {
     pub issuer_node_id: NodeId,
 }
 
+/// A record of a verified credential (Verifier role)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct VerifiedCredentialRecord {
+    pub presentation_id: String,
+    pub credential: SignedIncomeCredential,
+    pub employee_node_id: NodeId,
+    pub issuer_node_id: NodeId,
+    pub is_valid: bool,
+    pub is_trusted: bool,
+    pub verified_at: String,
+    pub verifier_node_id: NodeId,
+}
+
 pub struct PeerNode {
     secret_key: SecretKey,
     router: Router,
@@ -80,6 +94,7 @@ impl PeerNode {
         let pending_requests = Arc::new(RwLock::new(HashMap::new()));
         let trusted_issuers = Arc::new(RwLock::new(HashSet::new()));
         let received_credentials = Arc::new(RwLock::new(HashMap::new()));
+        let verified_credentials = Arc::new(RwLock::new(HashMap::new()));
 
         let peer = Peer::new(
             event_sender.clone(),
@@ -89,6 +104,7 @@ impl PeerNode {
             pending_requests,
             trusted_issuers,
             received_credentials,
+            verified_credentials,
         );
 
         let router = Router::builder(endpoint)
@@ -169,6 +185,16 @@ impl PeerNode {
     /// Get all trusted issuers (Verifier only)
     pub async fn get_trusted_issuers(&self) -> Vec<NodeId> {
         self.peer.get_trusted_issuers().await
+    }
+
+    /// Get all verified credentials (Verifier only)
+    pub async fn get_verified_credentials(&self) -> Vec<VerifiedCredentialRecord> {
+        self.peer.get_verified_credentials().await
+    }
+
+    /// Get a specific verified credential (Verifier only)
+    pub async fn get_verified_credential(&self, presentation_id: &str) -> Option<VerifiedCredentialRecord> {
+        self.peer.get_verified_credential(presentation_id).await
     }
 
     /// Get all received credentials (Employee only)
@@ -280,7 +306,7 @@ pub enum CredentialMessage {
     },
 }
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct Peer {
     event_sender: broadcast::Sender<AcceptEvent>,
     role: Role,
@@ -289,16 +315,17 @@ pub struct Peer {
     pending_requests: Arc<RwLock<HashMap<String, PendingCredentialRequest>>>,
     trusted_issuers: Arc<RwLock<HashSet<NodeId>>>,
     received_credentials: Arc<RwLock<HashMap<String, ReceivedCredentialResponse>>>,
+    verified_credentials: Arc<RwLock<HashMap<String, VerifiedCredentialRecord>>>,
 }
 
-impl std::fmt::Debug for Peer {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("Peer")
-            .field("role", &self.role)
-            .field("node_id", &self.node_id)
-            .finish()
-    }
-}
+// impl std::fmt::Debug for Peer {
+//     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+//         f.debug_struct("Peer")
+//             .field("role", &self.role)
+//             .field("node_id", &self.node_id)
+//             .finish()
+//     }
+// }
 
 impl Peer {
     pub fn new(
@@ -309,6 +336,7 @@ impl Peer {
         pending_requests: Arc<RwLock<HashMap<String, PendingCredentialRequest>>>,
         trusted_issuers: Arc<RwLock<HashSet<NodeId>>>,
         received_credentials: Arc<RwLock<HashMap<String, ReceivedCredentialResponse>>>,
+        verified_credentials: Arc<RwLock<HashMap<String, VerifiedCredentialRecord>>>,
     ) -> Self {
         Self {
             event_sender,
@@ -318,6 +346,7 @@ impl Peer {
             pending_requests,
             trusted_issuers,
             received_credentials,
+            verified_credentials,
         }
     }
 }
@@ -564,6 +593,22 @@ impl Peer {
                     
                     info!("Verification result: valid={}, trusted={}", is_valid, is_trusted);
                     
+                    // Store the verification record
+                    let record = VerifiedCredentialRecord {
+                        presentation_id: presentation_id.clone(),
+                        credential: credential.clone(),
+                        employee_node_id: credential.employee_node_id(),
+                        issuer_node_id,
+                        is_valid,
+                        is_trusted,
+                        verified_at: chrono::Utc::now().to_rfc3339(),
+                        verifier_node_id: self.node_id,
+                    };
+                    
+                    let mut verified = self.verified_credentials.write().await;
+                    verified.insert(presentation_id.clone(), record);
+                    drop(verified);
+                    
                     Ok(CredentialMessage::VerificationResult {
                         presentation_id,
                         is_valid,
@@ -767,6 +812,18 @@ impl Peer {
     pub async fn get_trusted_issuers(&self) -> Vec<NodeId> {
         let issuers = self.trusted_issuers.read().await;
         issuers.iter().copied().collect()
+    }
+
+    /// Get all verified credentials (Verifier)
+    pub async fn get_verified_credentials(&self) -> Vec<VerifiedCredentialRecord> {
+        let verified = self.verified_credentials.read().await;
+        verified.values().cloned().collect()
+    }
+
+    /// Get a specific verified credential (Verifier)
+    pub async fn get_verified_credential(&self, presentation_id: &str) -> Option<VerifiedCredentialRecord> {
+        let verified = self.verified_credentials.read().await;
+        verified.get(presentation_id).cloned()
     }
 
     /// Get all received credentials (Employee)
