@@ -1,4 +1,4 @@
-use iroh::{NodeId, SecretKey};
+use iroh::{EndpointId, SecretKey};
 use iroh_base::Signature;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -47,15 +47,15 @@ pub struct IncomeCredential {
     /// Unique credential identifier
     pub id: String,
     /// Employee's node ID (DID)
-    pub employee_node_id: NodeId,
+    pub employee_node_id: EndpointId,
     /// Employee's name
     pub employee_name: String,
     /// Employer's node ID (DID) - the issuer
-    pub employer_node_id: NodeId,
+    pub employer_node_id: EndpointId,
     /// Employer's organization name
     pub employer_name: String,
     /// Optional payroll processor node ID
-    pub payroll_processor_node_id: Option<NodeId>,
+    pub payroll_processor_node_id: Option<EndpointId>,
     /// Optional payroll processor name
     pub payroll_processor_name: Option<String>,
     /// Gross salary amount (as string to avoid float precision issues)
@@ -85,9 +85,9 @@ pub struct SignedIncomeCredential {
 impl IncomeCredential {
     /// Creates a new income credential
     pub fn new(
-        employee_node_id: NodeId,
+        employee_node_id: EndpointId,
         employee_name: String,
-        employer_node_id: NodeId,
+        employer_node_id: EndpointId,
         employer_name: String,
         gross_salary: String,
         net_salary: String,
@@ -114,11 +114,11 @@ impl IncomeCredential {
 
     /// Creates a credential with payroll processor information
     pub fn new_with_processor(
-        employee_node_id: NodeId,
+        employee_node_id: EndpointId,
         employee_name: String,
-        employer_node_id: NodeId,
+        employer_node_id: EndpointId,
         employer_name: String,
-        payroll_processor_node_id: NodeId,
+        payroll_processor_node_id: EndpointId,
         payroll_processor_name: String,
         gross_salary: String,
         net_salary: String,
@@ -219,12 +219,12 @@ impl SignedIncomeCredential {
     }
 
     /// Returns the employee's node ID
-    pub fn employee_node_id(&self) -> NodeId {
+    pub fn employee_node_id(&self) -> EndpointId {
         self.credential.employee_node_id
     }
 
     /// Returns the employer's node ID (issuer)
-    pub fn issuer_node_id(&self) -> NodeId {
+    pub fn issuer_node_id(&self) -> EndpointId {
         self.credential.employer_node_id
     }
 
@@ -242,7 +242,7 @@ mod tests {
         SecretKey::generate(&mut rand::rng())
     }
 
-    fn test_node_id(key: &SecretKey) -> NodeId {
+    fn test_node_id(key: &SecretKey) -> EndpointId {
         key.public()
     }
 

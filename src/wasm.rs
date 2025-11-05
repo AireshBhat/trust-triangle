@@ -68,7 +68,7 @@ impl PeerNode {
     }
 
     pub fn node_id(&self) -> String {
-        self.0.endpoint().node_id().to_string()
+        self.0.endpoint().id().to_string()
     }
 
     pub fn secret_key(&self) -> String {

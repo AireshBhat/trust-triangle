@@ -1,7 +1,7 @@
 use anyhow::Result;
 use async_channel::Sender;
 use iroh::{
-    Endpoint, NodeId, SecretKey,
+    Endpoint, EndpointId, SecretKey,
     endpoint::Connection,
     protocol::{AcceptError, ProtocolHandler, Router},
 };
@@ -29,7 +29,7 @@ pub enum RequestStatus {
 #[serde(rename_all = "camelCase")]
 pub struct PendingCredentialRequest {
     pub request_id: String,
-    pub employee_node_id: NodeId,
+    pub employee_node_id: EndpointId,
     pub employee_name: String,
     pub gross_salary: String,
     pub net_salary: String,
@@ -48,7 +48,7 @@ pub struct ReceivedCredentialResponse {
     pub credential: Option<SignedIncomeCredential>,
     pub error: Option<String>,
     pub received_at: String,
-    pub issuer_node_id: NodeId,
+    pub issuer_node_id: EndpointId,
 }
 
 /// A record of a verified credential (Verifier role)
@@ -57,12 +57,12 @@ pub struct ReceivedCredentialResponse {
 pub struct VerifiedCredentialRecord {
     pub presentation_id: String,
     pub credential: SignedIncomeCredential,
-    pub employee_node_id: NodeId,
-    pub issuer_node_id: NodeId,
+    pub employee_node_id: EndpointId,
+    pub issuer_node_id: EndpointId,
     pub is_valid: bool,
     pub is_trusted: bool,
     pub verified_at: String,
-    pub verifier_node_id: NodeId,
+    pub verifier_node_id: EndpointId,
 }
 
 pub struct PeerNode {
@@ -80,13 +80,13 @@ impl PeerNode {
         let secret_key = secret_key.unwrap_or_else(|| SecretKey::generate(&mut rand::rng()));
         let endpoint = iroh::Endpoint::builder()
             .secret_key(secret_key.clone())
-            .discovery_n0()
+            .discovery(iroh::discovery::pkarr::PkarrPublisher::n0_dns())
             .alpns(vec![CREDENTIAL_ALPN.to_vec()])
             .bind()
             .await?;
         info!("endpoint bound");
 
-        let node_id = endpoint.node_id();
+        let node_id = endpoint.id();
         info!("node id: {node_id:#?}");
 
         let (event_sender, _event_receiver) = broadcast::channel(128);
@@ -134,7 +134,7 @@ impl PeerNode {
 
     pub fn connect(
         &self,
-        node_id: NodeId,
+        node_id: EndpointId,
         message: CredentialMessage,
     ) -> impl Stream<Item = ConnectEvent> + Unpin + use<> {
         let (event_sender, event_receiver) = async_channel::bounded(16);
@@ -168,22 +168,22 @@ impl PeerNode {
     }
 
     /// Add a trusted issuer to the trust list (Verifier only)
-    pub async fn add_trusted_issuer(&self, node_id: NodeId) -> Result<(), anyhow::Error> {
+    pub async fn add_trusted_issuer(&self, node_id: EndpointId) -> Result<(), anyhow::Error> {
         self.peer.add_trusted_issuer(node_id).await
     }
 
     /// Remove a trusted issuer from the trust list (Verifier only)
-    pub async fn remove_trusted_issuer(&self, node_id: NodeId) -> Result<(), anyhow::Error> {
+    pub async fn remove_trusted_issuer(&self, node_id: EndpointId) -> Result<(), anyhow::Error> {
         self.peer.remove_trusted_issuer(node_id).await
     }
 
     /// Check if an issuer is trusted (Verifier only)
-    pub async fn is_trusted_issuer(&self, node_id: NodeId) -> bool {
+    pub async fn is_trusted_issuer(&self, node_id: EndpointId) -> bool {
         self.peer.is_trusted_issuer(node_id).await
     }
 
     /// Get all trusted issuers (Verifier only)
-    pub async fn get_trusted_issuers(&self) -> Vec<NodeId> {
+    pub async fn get_trusted_issuers(&self) -> Vec<EndpointId> {
         self.peer.get_trusted_issuers().await
     }
 
@@ -229,19 +229,19 @@ pub enum ConnectEvent {
 #[serde(tag = "type", rename_all = "camelCase")]
 pub enum AcceptEvent {
     Accepted {
-        node_id: NodeId,
+        node_id: EndpointId,
     },
     MessageReceived {
-        node_id: NodeId,
+        node_id: EndpointId,
         message: CredentialMessage,
     },
     ResponseSent {
-        node_id: NodeId,
+        node_id: EndpointId,
         message: CredentialMessage,
         bytes_sent: u64,
     },
     Closed {
-        node_id: NodeId,
+        node_id: EndpointId,
         error: Option<String>,
     },
 }
@@ -261,7 +261,7 @@ pub enum CredentialMessage {
     /// Employee → Issuer: Request to issue an income credential
     IssueRequest {
         request_id: String,
-        employee_node_id: NodeId,
+        employee_node_id: EndpointId,
         employee_name: String,
         gross_salary: String,
         net_salary: String,
@@ -294,7 +294,7 @@ pub enum CredentialMessage {
         presentation_id: String,
         is_valid: bool,
         is_trusted: bool,
-        issuer_node_id: NodeId,
+        issuer_node_id: EndpointId,
         message: String,
     },
     
@@ -311,9 +311,9 @@ pub struct Peer {
     event_sender: broadcast::Sender<AcceptEvent>,
     role: Role,
     secret_key: SecretKey,
-    node_id: NodeId,
+    node_id: EndpointId,
     pending_requests: Arc<RwLock<HashMap<String, PendingCredentialRequest>>>,
-    trusted_issuers: Arc<RwLock<HashSet<NodeId>>>,
+    trusted_issuers: Arc<RwLock<HashSet<EndpointId>>>,
     received_credentials: Arc<RwLock<HashMap<String, ReceivedCredentialResponse>>>,
     verified_credentials: Arc<RwLock<HashMap<String, VerifiedCredentialRecord>>>,
 }
@@ -332,9 +332,9 @@ impl Peer {
         event_sender: broadcast::Sender<AcceptEvent>,
         role: Role,
         secret_key: SecretKey,
-        node_id: NodeId,
+        node_id: EndpointId,
         pending_requests: Arc<RwLock<HashMap<String, PendingCredentialRequest>>>,
-        trusted_issuers: Arc<RwLock<HashSet<NodeId>>>,
+        trusted_issuers: Arc<RwLock<HashSet<EndpointId>>>,
         received_credentials: Arc<RwLock<HashMap<String, ReceivedCredentialResponse>>>,
         verified_credentials: Arc<RwLock<HashMap<String, VerifiedCredentialRecord>>>,
     ) -> Self {
@@ -356,7 +356,7 @@ impl Peer {
         self,
         connection: Connection,
     ) -> std::result::Result<(), AcceptError> {
-        let node_id = connection.remote_node_id()?;
+        let node_id = connection.remote_id();
         self.event_sender
             .send(AcceptEvent::Accepted { node_id })
             .ok();
@@ -369,7 +369,7 @@ impl Peer {
     }
 
     async fn handle_connection_0(&self, connection: &Connection) -> Result<(), AcceptError> {
-        let node_id = connection.remote_node_id().unwrap();
+        let node_id = connection.remote_id();
         info!("Accepted connection from {node_id}");
 
         // Our protocol is a request-response protocol with structured messages
@@ -515,7 +515,7 @@ impl Peer {
     async fn handle_issue_response(
         &self,
         message: CredentialMessage,
-        issuer_node_id: NodeId,
+        issuer_node_id: EndpointId,
     ) -> Result<CredentialMessage, anyhow::Error> {
         if let CredentialMessage::IssueResponse {
             request_id,
@@ -775,7 +775,7 @@ impl Peer {
     }
 
     /// Add a trusted issuer to the trust list
-    pub async fn add_trusted_issuer(&self, node_id: NodeId) -> Result<(), anyhow::Error> {
+    pub async fn add_trusted_issuer(&self, node_id: EndpointId) -> Result<(), anyhow::Error> {
         let mut issuers = self.trusted_issuers.write().await;
         let was_new = issuers.insert(node_id);
         drop(issuers);
@@ -789,7 +789,7 @@ impl Peer {
     }
 
     /// Remove a trusted issuer from the trust list
-    pub async fn remove_trusted_issuer(&self, node_id: NodeId) -> Result<(), anyhow::Error> {
+    pub async fn remove_trusted_issuer(&self, node_id: EndpointId) -> Result<(), anyhow::Error> {
         let mut issuers = self.trusted_issuers.write().await;
         let was_present = issuers.remove(&node_id);
         drop(issuers);
@@ -803,13 +803,13 @@ impl Peer {
     }
 
     /// Check if an issuer is trusted
-    pub async fn is_trusted_issuer(&self, node_id: NodeId) -> bool {
+    pub async fn is_trusted_issuer(&self, node_id: EndpointId) -> bool {
         let issuers = self.trusted_issuers.read().await;
         issuers.contains(&node_id)
     }
 
     /// Get all trusted issuers
-    pub async fn get_trusted_issuers(&self) -> Vec<NodeId> {
+    pub async fn get_trusted_issuers(&self) -> Vec<EndpointId> {
         let issuers = self.trusted_issuers.read().await;
         issuers.iter().copied().collect()
     }
@@ -851,7 +851,7 @@ impl ProtocolHandler for Peer {
 
 async fn connect(
     endpoint: &Endpoint,
-    node_id: NodeId,
+    node_id: EndpointId,
     message: CredentialMessage,
     event_sender: Sender<ConnectEvent>,
 ) -> Result<()> {
