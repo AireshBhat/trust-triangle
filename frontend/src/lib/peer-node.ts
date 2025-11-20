@@ -183,6 +183,7 @@ export class PeerNodeAPI implements API {
             case 'connected':
               conn.status = 'connected';
               conn.lastActivity = new Date();
+              log.info(`Connected to node: ${nodeId}`);
               break;
             case 'messageSent':
               conn.lastActivity = new Date();

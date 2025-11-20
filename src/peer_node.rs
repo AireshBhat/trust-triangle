@@ -4,6 +4,7 @@ use iroh::{
     Endpoint, EndpointId, SecretKey,
     endpoint::Connection,
     protocol::{AcceptError, ProtocolHandler, Router},
+    discovery::mdns::MdnsDiscovery,
 };
 use n0_future::{Stream, StreamExt, boxed::BoxStream, task};
 use serde::{Deserialize, Serialize};
@@ -78,15 +79,25 @@ impl PeerNode {
     /// Spawns a peer node.
     pub async fn spawn(secret_key: Option<SecretKey>, role: Role) -> Result<Self, anyhow::Error> {
         let secret_key = secret_key.unwrap_or_else(|| SecretKey::generate(&mut rand::rng()));
+        
         let endpoint = iroh::Endpoint::builder()
             .secret_key(secret_key.clone())
             .discovery(iroh::discovery::pkarr::PkarrPublisher::n0_dns())
             .alpns(vec![CREDENTIAL_ALPN.to_vec()])
             .bind()
             .await?;
-        info!("endpoint bound");
-
+        info!("endpoint bound with Pkarr discovery");
+        
         let node_id = endpoint.id();
+        
+        // Add MDNS discovery for local network peer discovery after endpoint is created
+        let mdns_discovery = MdnsDiscovery::builder()
+            .advertise(true)
+            .service_name("social-id".to_string())
+            .build(node_id)?;
+        
+        endpoint.discovery().add(mdns_discovery);
+        info!("MDNS local network discovery enabled");
         info!("node id: {node_id:#?}");
 
         let (event_sender, _event_receiver) = broadcast::channel(128);

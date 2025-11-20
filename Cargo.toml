@@ -10,7 +10,7 @@ crate-type = ["cdylib", "rlib"]
 anyhow = "1"
 blake3 = { version = "1", package = "iroh-blake3" }
 hex = "0.4"
-iroh = { version = "0.95", default-features = false }
+iroh = { version = "0.95", default-features = false, features = ["discovery-local-network"] }
 iroh-base = { version = "0.95", default-features = false }
 iroh-gossip = { version = "0.94", default-features = false, features = ["net"] }
 iroh-tickets = "0.1.0"
